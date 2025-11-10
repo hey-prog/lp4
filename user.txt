@@ -1,0 +1,323 @@
+# ============================================================
+#                 LP-IV MASTER CODE FILE
+# ============================================================
+# Contains all finalized template codes for:
+# 1️⃣ Feedforward Neural Network (FNN)
+# 2️⃣ Convolutional Neural Network (CNN)
+# 3️⃣ Autoencoder (Anomaly Detection)
+# 4️⃣ Continuous Bag of Words (CBOW)
+# 5️⃣ Object Detection (Transfer Learning)
+# ============================================================
+
+
+# ============================================================
+# 1️⃣ FEEDFORWARD NEURAL NETWORK (FNN)
+# ============================================================
+
+import pandas as pd
+import numpy as np
+from tensorflow import keras
+from tensorflow.keras import layers
+import matplotlib.pyplot as plt
+
+print("\n=== Running FNN ===")
+
+train = pd.read_csv('LP-IV-datasets/CIFR(Ass2&3)/train_data.csv')
+test  = pd.read_csv('LP-IV-datasets/CIFR(Ass2&3)/test_data.csv')
+
+X_train = train.drop('label', axis=1).values / 255.0
+y_train = train['label'].values
+X_test  = test.drop('label', axis=1).values / 255.0
+y_test  = test['label'].values
+
+model = keras.Sequential([
+    layers.Dense(512, activation='relu', input_shape=(3072,)),
+    # Alternative (Adam): add Dropout and deeper layers
+    # layers.Dropout(0.3),
+    # layers.Dense(256, activation='relu'),
+    layers.Dense(10, activation='softmax')
+])
+
+optimizer_choice = keras.optimizers.SGD()
+# Alternative:
+# optimizer_choice = keras.optimizers.Adam()
+
+model.compile(optimizer=optimizer_choice,
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+history = model.fit(X_train, y_train, epochs=11, batch_size=128, validation_split=0.1)
+
+test_loss, test_acc = model.evaluate(X_test, y_test)
+print(f"\nTest Accuracy: {test_acc:.4f}")
+
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Training & Validation Loss (FNN)')
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'], label='Val Acc')
+plt.title('Training & Validation Accuracy (FNN)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+
+# ============================================================
+# 2️⃣ CONVOLUTIONAL NEURAL NETWORK (CNN)
+# ============================================================
+
+import pandas as pd
+import numpy as np
+from tensorflow import keras
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+
+print("\n=== Running CNN ===")
+
+train = pd.read_csv('LP-IV-datasets/CIFR(Ass2&3)/train_data.csv', nrows=10000)
+test  = pd.read_csv('LP-IV-datasets/CIFR(Ass2&3)/test_data.csv',  nrows=2000)
+
+X_train = train.drop('label', axis=1).values.reshape(-1, 32, 32, 3).astype('float32') / 255.0
+y_train = train['label'].values
+X_test  = test.drop('label', axis=1).values.reshape(-1, 32, 32, 3).astype('float32') / 255.0
+y_test  = test['label'].values
+
+model = models.Sequential([
+    layers.Conv2D(32, (3,3), activation='relu', input_shape=(32,32,3)),
+    layers.MaxPooling2D((2,2)),
+    layers.Conv2D(64, (3,3), activation='relu'),
+    layers.MaxPooling2D((2,2)),
+    layers.Conv2D(128, (3,3), activation='relu'),
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.3),
+    layers.Dense(10, activation='softmax')
+])
+
+# Alternative (Deep CNN): Use multi-block model from previous version.
+
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+history = model.fit(X_train, y_train, epochs=11, batch_size=128, validation_split=0.1)
+
+test_loss, test_acc = model.evaluate(X_test, y_test)
+print(f"\nTest Accuracy: {test_acc:.4f}")
+
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Training & Validation Loss (CNN)')
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'], label='Val Acc')
+plt.title('Training & Validation Accuracy (CNN)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+
+# ============================================================
+# 3️⃣ AUTOENCODER (ANOMALY DETECTION)
+# ============================================================
+
+import pandas as pd
+import numpy as np
+from tensorflow import keras
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix
+
+print("\n=== Running Autoencoder ===")
+
+data = pd.read_csv("LP-IV-datasets/CreditCard/credit_card_data.csv")
+X = data.drop('Class', axis=1).values
+y = data['Class'].values
+
+X = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0) + 1e-6)
+X_train = X[y == 0]
+X_test = X
+y_test = y
+
+input_dim = X_train.shape[1]
+input_layer = layers.Input(shape=(input_dim,))
+encoded = layers.Dense(64, activation='relu')(input_layer)
+encoded = layers.Dense(32, activation='relu')(encoded)
+encoded = layers.Dense(16, activation='relu')(encoded)
+decoded = layers.Dense(32, activation='relu')(encoded)
+decoded = layers.Dense(64, activation='relu')(decoded)
+decoded = layers.Dense(input_dim, activation='sigmoid')(decoded)
+
+autoencoder = models.Model(inputs=input_layer, outputs=decoded)
+autoencoder.compile(optimizer='adam', loss='mse', metrics=['mae'])
+
+history = autoencoder.fit(X_train, X_train, epochs=20, batch_size=256, validation_split=0.1, shuffle=True)
+
+reconstructions = autoencoder.predict(X_test)
+mse = np.mean(np.power(X_test - reconstructions, 2), axis=1)
+threshold = np.percentile(mse, 95)
+y_pred = (mse > threshold).astype(int)
+
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred, digits=4))
+
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Autoencoder Training Loss')
+plt.legend()
+plt.show()
+
+
+
+# ============================================================
+# 4️⃣ CONTINUOUS BAG OF WORDS (CBOW)
+# ============================================================
+
+import numpy as np
+import re
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, Lambda
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+import seaborn as sns
+
+print("\n=== Running CBOW ===")
+
+data = """PASTE YOUR DOCUMENT TEXT HERE"""
+
+sentences = data.split('.')
+clean_sent = []
+for sentence in sentences:
+    if sentence.strip() == "":
+        continue
+    sentence = re.sub('[^A-Za-z0-9]+', ' ', sentence)
+    sentence = re.sub(r'(?:^| )\w (?:$| )', ' ', sentence).strip()
+    sentence = sentence.lower()
+    clean_sent.append(sentence)
+
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(clean_sent)
+sequences = tokenizer.texts_to_sequences(clean_sent)
+index_to_word, word_to_index = {}, {}
+
+for i, sequence in enumerate(sequences):
+    words = clean_sent[i].split()
+    for j, value in enumerate(sequence):
+        index_to_word[value] = words[j]
+        word_to_index[words[j]] = value
+
+vocab_size = len(tokenizer.word_index) + 1
+context_size, emb_size = 2, 10
+contexts, targets = [], []
+
+for sequence in sequences:
+    for i in range(context_size, len(sequence) - context_size):
+        target = sequence[i]
+        context = [sequence[i - 2], sequence[i - 1], sequence[i + 1], sequence[i + 2]]
+        contexts.append(context)
+        targets.append(target)
+
+X, Y = np.array(contexts), np.array(targets)
+
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=emb_size, input_length=2 * context_size),
+    Lambda(lambda x: tf.reduce_mean(x, axis=1)),
+    Dense(256, activation='relu'),
+    Dense(512, activation='relu'),
+    Dense(vocab_size, activation='softmax')
+])
+
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+history = model.fit(X, Y, epochs=60, verbose=1)
+
+plt.figure(figsize=(8,4))
+sns.lineplot(x=range(len(history.history['loss'])), y=history.history['loss'], label='Training Loss')
+plt.title("CBOW Model Training Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+embeddings = model.get_weights()[0]
+pca = PCA(n_components=2)
+pca.fit_transform(embeddings)
+
+print("\nSample Vocabulary:", list(index_to_word.values())[:20])
+print("✅ CBOW Training Complete.")
+
+
+
+# ============================================================
+# 5️⃣ OBJECT DETECTION (TRANSFER LEARNING)
+# ============================================================
+
+import tensorflow as tf
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Flatten, Dropout
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import matplotlib.pyplot as plt
+
+print("\n=== Running Object Detection (Transfer Learning) ===")
+
+weights_path = "Object Detection(Ass6)/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5"
+train_dir = "Object Detection(Ass6)/caltech-101-img/"
+
+base_model = VGG16(weights=weights_path, include_top=False, input_shape=(224, 224, 3))
+for layer in base_model.layers:
+    layer.trainable = False
+
+datagen = ImageDataGenerator(rescale=1./255, validation_split=0.2, rotation_range=20,
+                             width_shift_range=0.1, height_shift_range=0.1,
+                             zoom_range=0.2, horizontal_flip=True)
+
+train_gen = datagen.flow_from_directory(train_dir, target_size=(224,224), batch_size=32,
+                                        class_mode='categorical', subset='training')
+val_gen = datagen.flow_from_directory(train_dir, target_size=(224,224), batch_size=32,
+                                      class_mode='categorical', subset='validation')
+
+x = Flatten()(base_model.output)
+x = Dense(512, activation='relu')(x)
+x = Dropout(0.5)(x)
+predictions = Dense(len(train_gen.class_indices), activation='softmax')(x)
+
+model = Model(inputs=base_model.input, outputs=predictions)
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
+              loss='categorical_crossentropy', metrics=['accuracy'])
+
+history = model.fit(train_gen, epochs=10, validation_data=val_gen)
+
+for layer in base_model.layers[-4:]:
+    layer.trainable = True
+
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
+              loss='categorical_crossentropy', metrics=['accuracy'])
+fine_tune_history = model.fit(train_gen, epochs=5, validation_data=val_gen)
+
+plt.figure(figsize=(10,4))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'] + fine_tune_history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'] + fine_tune_history.history['val_loss'], label='Val Loss')
+plt.title("Training & Validation Loss (Object Detection)")
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(history.history['accuracy'] + fine_tune_history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'] + fine_tune_history.history['val_accuracy'], label='Val Acc')
+plt.title("Training & Validation Accuracy (Object Detection)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+model.save("object_detection_vgg16.keras")
+print("\n✅ Object Detection Model Training Complete.")
